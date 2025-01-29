@@ -1,131 +1,66 @@
-import numpy as np
+# Attempting to implement the model using a CNN with additional layers
+
 import pandas as pd
-from matplotlib import pyplot as plt
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 
-data = pd.read_csv('../DigitRecognizer/train.csv')
-
-data = np.array(data)
-m, n = data.shape
-np.random.shuffle(data) # shuffle before splitting into dev and training sets
-
-data_dev = data[0:1000].T
-Y_dev = data_dev[0]
-X_dev = data_dev[1:n]
-X_dev = X_dev / 255.
-
-data_train = data[1000:m].T
-Y_train = data_train[0]
-X_train = data_train[1:n]
-X_train = X_train / 255.
-_,m_train = X_train.shape
-
-def init_params():
-    W1 = np.random.rand(10, 784) - 0.5
-    b1 = np.random.rand(10, 1) - 0.5
-    W2 = np.random.rand(10, 10) - 0.5
-    b2 = np.random.rand(10, 1) - 0.5
-    return W1, b1, W2, b2
-
-def ReLU(Z):
-    return np.maximum(Z, 0)
-
-def softmax(Z):
-    A = np.exp(Z) / sum(np.exp(Z))
-    return A
-    
-def forward_prop(W1, b1, W2, b2, X):
-    Z1 = W1.dot(X) + b1
-    A1 = ReLU(Z1)
-    Z2 = W2.dot(A1) + b2
-    A2 = softmax(Z2)
-    return Z1, A1, Z2, A2
-
-def ReLU_deriv(Z):
-    return Z > 0
-
-def one_hot(Y):
-    one_hot_Y = np.zeros((Y.size, Y.max() + 1))
-    one_hot_Y[np.arange(Y.size), Y] = 1
-    one_hot_Y = one_hot_Y.T
-    return one_hot_Y
-
-def backward_prop(Z1, A1, Z2, A2, W1, W2, X, Y):
-    one_hot_Y = one_hot(Y)
-    dZ2 = A2 - one_hot_Y
-    dW2 = 1 / m * dZ2.dot(A1.T)
-    db2 = 1 / m * np.sum(dZ2)
-    dZ1 = W2.T.dot(dZ2) * ReLU_deriv(Z1)
-    dW1 = 1 / m * dZ1.dot(X.T)
-    db1 = 1 / m * np.sum(dZ1)
-    return dW1, db1, dW2, db2
-
-def update_params(W1, b1, W2, b2, dW1, db1, dW2, db2, alpha):
-    W1 = W1 - alpha * dW1
-    b1 = b1 - alpha * db1    
-    W2 = W2 - alpha * dW2  
-    b2 = b2 - alpha * db2    
-    return W1, b1, W2, b2
-
-def get_predictions(A2):
-    return np.argmax(A2, 0)
-
-def get_accuracy(predictions, Y):
-    print(predictions, Y)
-    return np.sum(predictions == Y) / Y.size
-
-def gradient_descent(X, Y, alpha, iterations):
-    W1, b1, W2, b2 = init_params()
-    for i in range(iterations):
-        Z1, A1, Z2, A2 = forward_prop(W1, b1, W2, b2, X)
-        dW1, db1, dW2, db2 = backward_prop(Z1, A1, Z2, A2, W1, W2, X, Y)
-        W1, b1, W2, b2 = update_params(W1, b1, W2, b2, dW1, db1, dW2, db2, alpha)
-        if i % 499 == 0:
-            print("Iteration: ", i)
-            predictions = get_predictions(A2)
-            print(get_accuracy(predictions, Y))
-    return W1, b1, W2, b2
+# Loading the training dataset
+trainData = pd.read_csv('train.csv')
 
 
-W1, b1, W2, b2 = gradient_descent(X_train, Y_train, 0.10, 500)
+# Separate the features and labels into two variables
+Ytrain = trainData['label']
+Xtrain = trainData.drop(columns = ['label'])
 
-def make_predictions(X, W1, b1, W2, b2):
-    _, _, _, A2 = forward_prop(W1, b1, W2, b2, X)
-    predictions = get_predictions(A2)
-    return predictions
+# Normalize the pixel values from (0, 255) to (0, 1)
+Xtrain = Xtrain / 255.0
 
-def test_prediction(index, W1, b1, W2, b2):
-    current_image = X_train[:, index, None]
-    prediction = make_predictions(X_train[:, index, None], W1, b1, W2, b2)
-    label = Y_train[index]
-    print("Prediction: ", prediction)
-    print("Label: ", label)
-    
-    current_image = current_image.reshape((28, 28)) * 255
-    plt.gray()
-    plt.imshow(current_image, interpolation='nearest')
-    plt.show()
+# Reshape the features to fit the CNN input shape
+Xtrain = Xtrain.values.reshape(-1, 28, 28, 1) # Here, -1 means "infer the number of samples"
+
+# Load the test dataset
+testData = pd.read_csv('test.csv') # Test data has no labels
+Xtest = testData / 255.0
+Xtest = Xtest.values.reshape(-1, 28, 28, 1) # Reshape to 4D array for the CNN
+
+# Building the CNN
+model = Sequential([
+    Conv2D(32, (3, 3), activation = "relu", input_shape = (28, 28, 1)), # First convolutional layer
+    MaxPooling2D(pool_size = (2, 2)), # First pooling layer
+    Conv2D(64, (3, 3), activation = "relu", input_shape = (28, 28, 1)), # Second convolutional layer
+    MaxPooling2D(pool_size = (2, 2)), # Second pooling layer
+    Flatten(),
+    Dense(128, activation = "relu"), # Fully connected layer
+    Dense(10, activation = "softmax") # Output layer for 10 classes
+])
 
 
-test_prediction(0, W1, b1, W2, b2)
-test_prediction(1, W1, b1, W2, b2)
-test_prediction(2, W1, b1, W2, b2)
-test_prediction(3, W1, b1, W2, b2)
+# Compile the model
+model.compile(optimizer = "adam", loss = 'sparse_categorical_crossentropy', metrics = ['accuracy'])
 
+# Train the model
+numEpochs = 25
+history = model.fit(Xtrain, Ytrain, epochs = numEpochs, batch_size = 64, validation_split = 0.1)
 
-# Load test data
-test_data = pd.read_csv('test.csv')
-X_test = test_data.to_numpy().T
-X_test = X_test / 255.  # Normalize the data
+# Predict on the test set
+predictions = model.predict(Xtest)
 
-# Make predictions
-predictions = make_predictions(X_test, W1, b1, W2, b2)
+# Convert predictions to class labels
+predictedLabels = np.argmax(predictions, axis = 1)
 
-# Prepare the submission DataFrame
+for i in range(numEpochs):
+    print(f"Accuracy of Epoch {i}: {history.history['accuracy'][i] * 100:.2f}%")
+
+print(f"Final Validation Accuracy: {history.history['val_accuracy'][-1] * 100:.2f}%")
+
+# Prepare a submission file
 submission = pd.DataFrame({
-    "ImageId": np.arange(1, len(predictions) + 1),
-    "Label": predictions
+    "ImageId": np.arange(1, len(predictedLabels) + 1),
+    "Label": predictedLabels
 })
 
-# Save to CSV
-submission.to_csv('submission.csv', index=False)
+# Save the predictions ot a CSV file
+submission.to_csv('submission.csv', index = False)
 print("Submission file created: submission.csv")
